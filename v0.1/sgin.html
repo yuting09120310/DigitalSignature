@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 文件簽名系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #f5f5f5;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .document-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .document-viewer {
+            padding: 40px;
+            min-height: 800px;
+            background: #fafafa;
+            position: relative;
+        }
+
+        .document-page {
+            background: white;
+            padding: 60px;
+            margin: 0 auto;
+            max-width: 800px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            line-height: 1.8;
+            font-size: 16px;
+            position: relative;
+        }
+
+        .signature-field {
+            display: inline-block;
+            width: 200px;
+            height: 60px;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            background: rgba(0, 123, 255, 0.05);
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+            margin: 0 10px;
+            transition: all 0.3s ease;
+        }
+
+        .signature-field:hover {
+            border-color: #0056b3;
+            background: rgba(0, 123, 255, 0.1);
+            transform: scale(1.02);
+        }
+
+        .signature-field.signed {
+            border: 2px solid #28a745;
+            background: white;
+            padding: 5px;
+        }
+
+        .signature-field.signed img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .signature-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #007bff;
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        .signature-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .signature-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            width: 800px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .signature-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .signature-header h3 {
+            color: #333;
+            font-size: 20px;
+        }
+
+        .close-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: #c82333;
+        }
+
+        .signature-canvas-container {
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            background: #fafafa;
+            margin-bottom: 20px;
+            overflow: hidden;
+            width: 100%;
+            height: 250px;
+        }
+
+        #signatureCanvas {
+            display: block;
+            cursor: crosshair;
+            background: white;
+            width: 100%;
+            height: 100%;
+        }
+
+        .signature-controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+            transform: translateY(-2px);
+        }
+
+        .pen-options {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .pen-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 3px solid #ddd;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .pen-color:hover, .pen-color.active {
+            transform: scale(1.2);
+            border-color: #333;
+        }
+
+        .pen-size {
+            margin-left: 10px;
+        }
+
+        .signature-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+
+        .saved-signatures {
+            margin-top: 20px;
+        }
+
+        .saved-signature {
+            display: inline-block;
+            margin: 5px;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        .saved-signature:hover {
+            border-color: #007bff;
+            transform: scale(1.05);
+        }
+
+        .saved-signature img {
+            width: 150px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .status-bar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .document-page {
+                padding: 30px 20px;
+            }
+            
+            .signature-panel {
+                width: 95%;
+                padding: 20px;
+            }
+            
+            .signature-controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 PDF 文件簽名系統</h1>
+            <p>點擊文件中的簽名區域進行簽名，支援多處簽名功能</p>
+        </div>
+
+        <div class="document-container">
+            <div class="document-viewer">
+                <div class="document-page">
+                    <h2 style="text-align: center; margin-bottom: 30px;">合作協議書</h2>
+                    
+                    <p>茲有甲方與乙方就合作事宜達成以下協議：</p>
+                    
+                    <h3 style="margin: 20px 0 10px 0;">第一條 合作內容</h3>
+                    <p>雙方同意就軟體開發專案進行合作，甲方提供技術支援，乙方負責專案管理。合作期間自簽約日起算一年。</p>
+                    
+                    <h3 style="margin: 20px 0 10px 0;">第二條 權利義務</h3>
+                    <p>甲方應按時完成開發工作，乙方應提供必要的資源支援。雙方應保守商業機密，不得洩露合作內容。</p>
+                    
+                    <h3 style="margin: 20px 0 10px 0;">第三條 簽署</h3>
+                    <p>本協議經雙方簽署後生效，具有法律約束力。</p>
+                    
+                    <div style="margin-top: 50px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+                            <div>
+                                <p><strong>甲方簽名：</strong></p>
+                                <div class="signature-field" data-field="signature1">
+                                    <div class="signature-placeholder">點擊簽名</div>
+                                </div>
+                            </div>
+                            <div>
+                                <p><strong>乙方簽名：</strong></p>
+                                <div class="signature-field" data-field="signature2">
+                                    <div class="signature-placeholder">點擊簽名</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 30px;">
+                            <p><strong>見證人簽名：</strong></p>
+                            <div class="signature-field" data-field="signature3" style="margin: 10px auto;">
+                                <div class="signature-placeholder">點擊簽名</div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: right; margin-top: 30px;">
+                            <p>日期：2025年7月29日</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 簽名彈窗 -->
+    <div class="signature-modal" id="signatureModal">
+        <div class="signature-panel">
+            <div class="signature-header">
+                <h3>🖊️ 數位簽名</h3>
+                <button class="close-btn" onclick="closeSignatureModal()">&times;</button>
+            </div>
+            
+            <div class="signature-info">
+                <p><strong>提示：</strong>請在下方區域內簽名，支援滑鼠或觸控筆操作</p>
+            </div>
+            
+            <div class="signature-canvas-container">
+                <canvas id="signatureCanvas" width="740" height="250"></canvas>
+            </div>
+            
+            <div class="signature-controls">
+                <div class="pen-options">
+                    <span>筆觸顏色：</span>
+                    <div class="pen-color active" style="background: #000000;" data-color="#000000"></div>
+                    <div class="pen-color" style="background: #0066cc;" data-color="#0066cc"></div>
+                    <div class="pen-color" style="background: #cc0000;" data-color="#cc0000"></div>
+                </div>
+                
+                <div class="pen-size">
+                    <label>筆觸粗細：</label>
+                    <input type="range" id="penSize" min="1" max="8" value="3" style="width: 100px;">
+                    <span id="penSizeValue">3px</span>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="clearCanvas()">🗑️ 清除</button>
+                <button class="btn btn-primary" onclick="undoLastStroke()">↶ 復原</button>
+                <button class="btn btn-success" onclick="saveSignature()">✓ 確認簽名</button>
+            </div>
+            
+            <div class="saved-signatures" id="savedSignatures" style="display: none;">
+                <h4>已儲存的簽名：</h4>
+            </div>
+        </div>
+    </div>
+
+    <!-- 狀態提示 -->
+    <div class="status-bar" id="statusBar"></div>
+
+    <script>
+        // 全域變數
+        let canvas = null;
+        let ctx = null;
+        let isDrawing = false;
+        let currentField = null;
+        let strokes = [];
+        let currentStroke = [];
+        let signatures = {}; // 儲存簽名資料
+        let savedSignatures = []; // 儲存的簽名範本
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCanvas();
+            bindEvents();
+            loadSavedSignatures();
+        });
+
+        function initializeCanvas() {
+            canvas = document.getElementById('signatureCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // 確保畫布可見
+            canvas.width = 740;
+            canvas.height = 250;
+            canvas.style.width = '740px';
+            canvas.style.height = '250px';
+            
+            // 設定繪圖參數
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            
+            // 填充白色背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function bindEvents() {
+            // 簽名區域點擊事件
+            document.querySelectorAll('.signature-field').forEach(field => {
+                field.addEventListener('click', function() {
+                    currentField = this.dataset.field;
+                    openSignatureModal();
+                });
+            });
+
+            // 畫布事件
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing);
+
+            // 觸控事件
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDrawing);
+
+            // 筆觸設定事件
+            document.querySelectorAll('.pen-color').forEach(color => {
+                color.addEventListener('click', function() {
+                    document.querySelector('.pen-color.active').classList.remove('active');
+                    this.classList.add('active');
+                    ctx.strokeStyle = this.dataset.color;
+                });
+            });
+
+            document.getElementById('penSize').addEventListener('input', function() {
+                ctx.lineWidth = this.value;
+                document.getElementById('penSizeValue').textContent = this.value + 'px';
+            });
+        }
+
+        function openSignatureModal() {
+            document.getElementById('signatureModal').style.display = 'flex';
+            clearCanvas();
+            
+            // 如果該欄位已有簽名，載入它
+            if (signatures[currentField]) {
+                loadSignatureToCanvas(signatures[currentField]);
+            }
+        }
+
+        function closeSignatureModal() {
+            document.getElementById('signatureModal').style.display = 'none';
+            currentField = null;
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            currentStroke = [];
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            currentStroke.push({x, y});
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            currentStroke.push({x, y});
+        }
+
+        function stopDrawing() {
+            if (isDrawing && currentStroke.length > 0) {
+                strokes.push([...currentStroke]);
+                currentStroke = [];
+            }
+            isDrawing = false;
+        }
+
+        function handleTouch(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 
+                                            e.type === 'touchmove' ? 'mousemove' : 'mouseup', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            strokes = [];
+            currentStroke = [];
+        }
+
+        function undoLastStroke() {
+            if (strokes.length > 0) {
+                strokes.pop();
+                redrawCanvas();
+            }
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            strokes.forEach(stroke => {
+                if (stroke.length > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(stroke[0].x, stroke[0].y);
+                    stroke.forEach(point => ctx.lineTo(point.x, point.y));
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function saveSignature() {
+            if (strokes.length === 0) {
+                showStatus('請先進行簽名！', 'error');
+                return;
+            }
+
+            // 將簽名轉換為base64
+            const signatureData = canvas.toDataURL('image/png');
+            
+            // 儲存到對應欄位
+            signatures[currentField] = signatureData;
+            
+            // 更新文件中的簽名顯示
+            const field = document.querySelector(`[data-field="${currentField}"]`);
+            field.classList.add('signed');
+            field.innerHTML = `<img src="${signatureData}" alt="簽名">`;
+            
+            // 儲存到本機範本（可選）
+            if (!savedSignatures.includes(signatureData)) {
+                savedSignatures.push(signatureData);
+                updateSavedSignatures();
+            }
+            
+            showStatus('簽名已儲存！', 'success');
+            closeSignatureModal();
+            
+            // 模擬儲存到資料庫
+            console.log('簽名資料：', {
+                field: currentField,
+                signature: signatureData,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        function loadSignatureToCanvas(signatureData) {
+            const img = new Image();
+            img.onload = function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = signatureData;
+        }
+
+        function loadSavedSignatures() {
+            // 這裡可以從localStorage或資料庫載入已儲存的簽名
+            const saved = localStorage.getItem('savedSignatures');
+            if (saved) {
+                savedSignatures = JSON.parse(saved);
+                updateSavedSignatures();
+            }
+        }
+
+        function updateSavedSignatures() {
+            const container = document.getElementById('savedSignatures');
+            if (savedSignatures.length > 0) {
+                container.style.display = 'block';
+                container.innerHTML = '<h4>已儲存的簽名：</h4>';
+                
+                savedSignatures.forEach((signature, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'saved-signature';
+                    div.innerHTML = `<img src="${signature}" alt="簽名${index + 1}">`;
+                    div.addEventListener('click', () => {
+                        loadSignatureToCanvas(signature);
+                        // 將簽名添加到筆劃陣列中（簡化處理）
+                        strokes = [[]]; // 標記為已有內容
+                    });
+                    container.appendChild(div);
+                });
+                
+                // 儲存到localStorage
+                localStorage.setItem('savedSignatures', JSON.stringify(savedSignatures));
+            }
+        }
+
+        function showStatus(message, type = 'success') {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.textContent = message;
+            statusBar.style.background = type === 'success' ? '#28a745' : '#dc3545';
+            statusBar.style.display = 'block';
+            
+            setTimeout(() => {
+                statusBar.style.display = 'none';
+            }, 3000);
+        }
+
+        // 鍵盤快捷鍵
+        document.addEventListener('keydown', function(e) {
+            if (document.getElementById('signatureModal').style.display === 'flex') {
+                if (e.key === 'Escape') {
+                    closeSignatureModal();
+                } else if (e.ctrlKey && e.key === 'z') {
+                    e.preventDefault();
+                    undoLastStroke();
+                } else if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    saveSignature();
+                }
+            }
+        });
+
+        // 導出功能（可擴展）
+        function exportDocument() {
+            const documentData = {
+                signatures: signatures,
+                timestamp: new Date().toISOString(),
+                documentId: 'doc_' + Date.now()
+            };
+            
+            console.log('文件資料：', documentData);
+            showStatus('文件資料已準備就緒！', 'success');
+            
+            // 這裡可以發送到後端API
+            // fetch('/api/documents', {
+            //     method: 'POST',
+            //     headers: { 'Content-Type': 'application/json' },
+            //     body: JSON.stringify(documentData)
+            // });
+        }
+    </script>
+</body>
+</html>
